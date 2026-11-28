@@ -3652,6 +3652,68 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Check for Updates is manual only: nothing runs until Settings is clicked,
+    // then the dialog reports the stubbed release result without freezing.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "check_for_updates_is_user_triggered");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        using simulator::update_check::FetchResult;
+        using simulator::update_check::Outcome;
+        auto &checker = s_app->testUpdateChecker();
+        checker.reset();
+        ctx->Yield(4);
+        // The app has drawn frames with no check running: no automatic check exists.
+        IM_CHECK(checker.result().outcome == Outcome::Idle);
+        IM_CHECK(!s_app->m_show_update_check);
+
+        checker.setFetcherForTesting([] {
+            return FetchResult{true,
+                               R"json({"tag_name": "v0.33.0",
+                        "html_url": "https://github.com/striderZA/Tiny-RF-Simulator/releases/tag/v0.33.0"})json",
+                               ""};
+        });
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/Check for Updates...");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_update_check);
+        waitForUi(ctx, [&] { return checker.result().outcome == Outcome::UpdateAvailable; });
+        IM_CHECK(checker.result().outcome == Outcome::UpdateAvailable);
+        IM_CHECK_EQ(checker.result().latest_tag, "v0.33.0");
+        IM_CHECK(ImGui::FindWindowByName("Check for Updates") != nullptr);
+        IM_CHECK(checker.result().release_url.find("/releases/tag/v0.33.0") != std::string::npos);
+
+        const auto lines = simulator::update_check::statusLines(checker.result());
+        IM_CHECK(std::any_of(lines.begin(), lines.end(), [](const std::string &line) {
+            return line.find("v0.33.0 is available.") != std::string::npos;
+        }));
+
+        ctx->SetRef("Check for Updates");
+        ctx->ItemClick("Close");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!s_app->m_show_update_check);
+
+        // A failed check stays visible with its reason instead of crashing.
+        checker.setFetcherForTesting(
+            [] { return FetchResult{false, "", "curl exited with code 6."}; });
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/Check for Updates...");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        waitForUi(ctx, [&] { return checker.result().outcome == Outcome::Failed; });
+        IM_CHECK(checker.result().outcome == Outcome::Failed);
+        IM_CHECK(checker.result().message.find("curl exited with code 6.") != std::string::npos);
+        IM_CHECK(ImGui::FindWindowByName("Check for Updates") != nullptr);
+
+        ctx->SetRef("Check for Updates");
+        ctx->ItemClick("Close");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!s_app->m_show_update_check);
+        checker.reset();
+    };
+
     // The utility docking group: opening an auxiliary view through its real
     // menu path must land it in the "Utility Space" dockspace, while core
     // instrument windows stay out of that group.
