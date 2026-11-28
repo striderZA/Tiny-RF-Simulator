@@ -3594,6 +3594,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View");
         ctx->Yield(2);
+        // Anchor the popup lookup on a known View item so the absence checks below
+        // cannot pass against the wrong focused window.
+        IM_CHECK(findMenuItem(ctx, "Spectrum Analyzer").ID != 0);
         IM_CHECK(findMenuItem(ctx, "Layouts").ID == 0);
         IM_CHECK(findMenuItem(ctx, "Load").ID == 0);
         ctx->KeyPress(ImGuiKey_Escape);
@@ -3642,6 +3645,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View");
         ctx->Yield(2);
+        IM_CHECK(findMenuItem(ctx, "Spectrum Analyzer").ID != 0);
         IM_CHECK(findMenuItem(ctx, "Layouts").ID == 0);
         ctx->KeyPress(ImGuiKey_Escape);
         ctx->SetRef("");
