@@ -160,3 +160,154 @@ TEST_CASE("Requested sizes are clamped to the supported range", "[ui_font][size]
     fonts.setSize(99, false);
     REQUIRE(fonts.requestedSize() == Catch::Approx(static_cast<float>(ui_font::kMaxSizePx)));
 }
+
+TEST_CASE("Default restores the built-in font, style, emphasis, and size", "[ui_font][size]") {
+    ImGuiScope imgui;
+    SessionState state(freshDir("default") / "app.ini");
+    UiFontController fonts(state);
+    startUp(fonts);
+    const float builtin = fonts.builtinSize();
+    REQUIRE(builtin > 0.0f);
+
+    fonts.setSize(22, false);
+    frame(fonts);
+    REQUIRE(fonts.appliedSize() == Catch::Approx(22.0f));
+
+    fonts.select("");
+    frame(fonts);
+    REQUIRE(fonts.appliedFamily().empty());
+    REQUIRE(fonts.savedFamily().empty());
+    REQUIRE(fonts.requestedSize() == Catch::Approx(builtin));
+    REQUIRE(ImGui::GetStyle().FontSizeBase == Catch::Approx(builtin));
+    REQUIRE(fonts.savedEmphasis() == ui_font::Emphasis::Bold);
+    REQUIRE(fonts.note().empty());
+}
+
+#ifdef _WIN32
+
+namespace {
+
+// The first installed family with a Regular and a Bold upright face, or false when none is.
+bool familyWithBold(std::string &family) {
+    const auto candidates = ui_font::enumerateSystemFonts();
+    for (const std::string &name : ui_font::monospacedFamilies(candidates)) {
+        bool regular = false;
+        bool bold = false;
+        for (const ui_font::FontFace &face : ui_font::familyFaces(candidates, name)) {
+            regular = regular || (!face.italic && face.weight == 400);
+            bold = bold || (!face.italic && face.weight == 700);
+        }
+        if (regular && bold) {
+            family = name;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("The family, style, emphasis, and size persist and restore", "[ui_font][persist]") {
+    std::string family;
+    if (!familyWithBold(family)) {
+        WARN("no monospaced family with Regular and Bold faces; persistence not exercised");
+        return;
+    }
+    const std::filesystem::path ini = freshDir("persist") / "app.ini";
+    const auto faces = ui_font::familyFaces(ui_font::enumerateSystemFonts(), family);
+    ui_font::FontFace chosen = faces.back();
+    {
+        ImGuiScope imgui;
+        SessionState state(ini);
+        UiFontController fonts(state);
+        startUp(fonts);
+        fonts.select(family);
+        frame(fonts);
+        fonts.selectStyle(chosen);
+        fonts.selectEmphasis(ui_font::Emphasis::Medium);
+        fonts.setSize(18, false);
+        frame(fonts);
+    }
+    SessionState saved(ini);
+    REQUIRE(saved.load(UiFontController::kSection, UiFontController::kKey, "") == family);
+    REQUIRE(saved.load(UiFontController::kSection, UiFontController::kStyleKey, "") ==
+            chosen.style);
+    REQUIRE(saved.load(UiFontController::kSection, UiFontController::kSizeKey, "") == "18");
+    REQUIRE(saved.load(UiFontController::kSection, UiFontController::kEmphasisKey, "") == "Medium");
+
+    // A new run starts on the saved choice. Medium is listed only where the family has it, so the
+    // emphasis is checked against what the restored family offers.
+    ImGuiScope imgui;
+    UiFontController restored(saved);
+    startUp(restored);
+    REQUIRE(restored.appliedFamily() == family);
+    REQUIRE(restored.appliedBodyFace().style == chosen.style);
+    REQUIRE(restored.requestedSize() == Catch::Approx(18.0f));
+}
+
+TEST_CASE("A family-only preference loads as Regular and Bold at the built-in size",
+          "[ui_font][migration]") {
+    std::string family;
+    if (!familyWithBold(family)) {
+        WARN("no monospaced family with Regular and Bold faces; migration not exercised");
+        return;
+    }
+    SessionState state(freshDir("migrate") / "app.ini");
+    state.save(UiFontController::kSection, UiFontController::kKey, family.c_str());
+
+    ImGuiScope imgui;
+    UiFontController fonts(state);
+    startUp(fonts);
+    REQUIRE(fonts.appliedFamily() == family);
+    REQUIRE(fonts.appliedBodyFace().weight == 400);
+    REQUIRE_FALSE(fonts.appliedBodyFace().italic);
+    REQUIRE(fonts.appliedEmphasisFace().weight == 700);
+    REQUIRE(fonts.requestedSize() == Catch::Approx(fonts.builtinSize()));
+    REQUIRE(fonts.note().empty());
+}
+
+TEST_CASE("A saved style that is no longer available falls back visibly, and is kept",
+          "[ui_font][fallback]") {
+    std::string family;
+    if (!familyWithBold(family)) {
+        WARN("no monospaced family with Regular and Bold faces; style fallback not exercised");
+        return;
+    }
+    SessionState state(freshDir("style_fallback") / "app.ini");
+    state.save(UiFontController::kSection, UiFontController::kKey, family.c_str());
+    state.save(UiFontController::kSection, UiFontController::kStyleKey, "Hairline Quirk");
+    state.save(UiFontController::kSection, UiFontController::kStyleWeightKey, "100");
+
+    ImGuiScope imgui;
+    UiFontController fonts(state);
+    startUp(fonts);
+    REQUIRE(fonts.appliedFamily() == family);
+    REQUIRE(fonts.appliedBodyFace().style != "Hairline Quirk");
+    REQUIRE(fonts.note().find("Hairline Quirk") != std::string::npos);
+    REQUIRE(fonts.savedStyle().name == "Hairline Quirk");
+}
+
+TEST_CASE("A saved size outside the range is clamped and says so", "[ui_font][fallback]") {
+    SessionState state(freshDir("size_fallback") / "app.ini");
+    state.save(UiFontController::kSection, UiFontController::kSizeKey, "40");
+
+    ImGuiScope imgui;
+    UiFontController fonts(state);
+    startUp(fonts);
+    REQUIRE(fonts.appliedSize() == Catch::Approx(static_cast<float>(ui_font::kMaxSizePx)));
+    REQUIRE(fonts.note().find("40 px") != std::string::npos);
+}
+
+TEST_CASE("A saved emphasis that is not Bold or Medium falls back to Bold, with a note",
+          "[ui_font][fallback]") {
+    SessionState state(freshDir("emphasis_fallback") / "app.ini");
+    state.save(UiFontController::kSection, UiFontController::kEmphasisKey, "Black");
+
+    ImGuiScope imgui;
+    UiFontController fonts(state);
+    startUp(fonts);
+    REQUIRE(fonts.savedEmphasis() == ui_font::Emphasis::Bold);
+    REQUIRE(fonts.note().find("Black") != std::string::npos);
+}
+
+#endif // _WIN32
