@@ -26,6 +26,8 @@ target_link_libraries(circuit_runtime
 add_library(editor_services STATIC
     src/editor_commands.cpp
     src/editor_history.cpp
+    src/process_capture.cpp
+    src/update_check.cpp
     src/component_params.cpp
     src/graph_editor_actions.cpp
     src/component_type_registry.cpp

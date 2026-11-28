@@ -670,6 +670,14 @@ add_standalone_test(test_editor_services_boundary
 )
 set_target_properties(test_editor_services_boundary PROPERTIES FOLDER "Library")
 
+# Standalone UI-free update check: version comparison and release-JSON parsing,
+# the missing-tool message, and the threaded checker with an injected fetcher.
+add_standalone_test(test_update_check
+    SOURCES test_update_check.cpp
+    LIBS simulator::editor_services
+)
+set_target_properties(test_update_check PROPERTIES FOLDER "Library")
+
 # Standalone, UI-free coverage for the in-place library part swap (issue #200): id and link
 # preservation, port/probe/instrument refusals, group and probe remapping, and the PFB link policy.
 add_standalone_test(test_component_swap

@@ -12,6 +12,44 @@ The lower part of the **Settings** menu holds the saved window-layout actions:
 
 All layout actions live under **Settings**; the **View** menu has no layout submenu.
 
+## Check for updates
+
+Choose **Settings > Check for Updates...** to ask GitHub for the newest released version. The simulator compares the latest release tag with the version shown at the right end of the menu bar.
+
+The window reports one of these results:
+
+- **You have the newest version (X.Y.Z).**
+- **vX.Y.Z is available.** — the window also shows the release page, with a **Copy release page** button, so you can read the release notes or download the archive yourself.
+- **Update check failed: ...** — the reason names the problem, such as no network connection, a failed request, or neither `curl` nor `wget` being installed. Nothing is changed and the project is not touched.
+
+**The app never checks for updates on its own.** There is no check at startup, no background timer, and no first-run prompt; a check happens only when you click **Check for Updates...**. The check runs in the background, so the interface keeps working while it waits.
+
+The check needs `curl` or `wget` on `PATH`. If neither is installed, the window says so instead of failing silently.
+
+### Install an update with the script
+
+The app never downloads or installs anything itself. To replace the installed copy, download the new release archive from the release page and unpack it over the old files, or run the update script from a checkout of the repository:
+
+```sh
+sh scripts/update.sh --dir /path/to/rf-simulator-linux
+```
+
+On Windows, run it with Git for Windows `sh` from the folder that holds `tiny-rf-simulator.exe`:
+
+```sh
+sh scripts/update.sh --dir "C:/path/to/rf-simulator-windows"
+```
+
+The script uses only the tools the release process already assumes: `curl` or `wget`, and `tar` on Linux or `unzip` on Windows. It:
+
+- fetches the newest release for the platform, or the tag you pass with `--tag`;
+- checks that the download is the expected archive (the app, `rf-sim-mcp`, `component_data`, and the MinGW runtime DLLs on Windows) and verifies the SHA-256 checksum when the release publishes one;
+- refuses to run while `tiny-rf-simulator.exe` is running on Windows;
+- stages the files, moves the previous ones into a `.rf-sim-backup-<date>-<time>` folder beside the app, and moves the new ones into place;
+- prints the version installed, the files replaced, and how to roll back.
+
+Use `--dry-run` to download and verify without changing anything, and `--no-running-check` to skip the Windows running-app check. The previous files stay in the backup folder until you delete it; to roll back, move them back over the new files.
+
 ## Choose a UI font
 
 1. Choose **Settings > UI Font...** to open the Settings window.

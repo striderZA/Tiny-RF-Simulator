@@ -34,6 +34,9 @@
 #include <climits>
 #include <unistd.h>
 #endif
+// The running build's version, used by the update check and its dialog.
+std::string appVersion() { return APP_VERSION; }
+
 // Directory of the running executable, for exe-relative data/layout lookup.
 // Falls back to the current working directory if exe-path detection fails.
 // Same convention as layout/ (LayoutManager) and tutorial/ (TutorialState).
@@ -975,6 +978,34 @@ static const char *extensionStatusName(ExtensionStatusKind status) {
     return "Invalid";
 }
 
+void RfSimulatorApp::drawUpdateCheck() {
+    if (!m_show_update_check)
+        return;
+
+    ImGui::SetNextWindowSize(ImVec2(480.0f, 0.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Check for Updates", &m_show_update_check,
+                     ImGuiWindowFlags_AlwaysAutoResize)) {
+        const auto &result = m_update_checker.result();
+        for (const std::string &line : simulator::update_check::statusLines(result))
+            ImGui::TextWrapped("%s", line.c_str());
+
+        if (result.outcome == simulator::update_check::Outcome::UpdateAvailable &&
+            ImGui::Button("Copy release page"))
+            ImGui::SetClipboardText(result.release_url.c_str());
+
+        ImGui::Separator();
+        ImGui::BeginDisabled(m_update_checker.isChecking());
+        if (ImGui::Button("Check again"))
+            m_update_checker.start();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+            m_show_update_check = false;
+        ImGui::TextDisabled("The app never checks for updates unless you click Check for Updates.");
+    }
+    ImGui::End();
+}
+
 void RfSimulatorApp::drawExtensionsPanel() {
     if (!m_show_extensions)
         return;
@@ -1813,6 +1844,9 @@ void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
 
+    // Reaps a user-triggered update check without waiting on the worker.
+    m_update_checker.poll();
+
     // Reset the unsaved dialog flag at the start of each frame.
     // The menu handlers below set it to true only when the project is dirty.
     m_show_unsaved_dialog = false;
@@ -1948,6 +1982,12 @@ void RfSimulatorApp::draw_ui() {
             }
             if (ImGui::MenuItem("Manage..."))
                 m_show_manage_layouts_dialog = true;
+            ImGui::Separator();
+            // Manual only: this is the single place a release check is started.
+            if (ImGui::MenuItem("Check for Updates...")) {
+                m_show_update_check = true;
+                m_update_checker.start();
+            }
             ImGui::EndMenu();
         }
 
@@ -2378,6 +2418,8 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_show_settings)
         m_settings_panel.draw(&m_show_settings, m_ui_font);
+
+    drawUpdateCheck();
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);

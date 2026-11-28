@@ -54,6 +54,7 @@
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
 #include "ui_font_controller.h"
+#include "update_check.h"
 #include "view_manager.h"
 
 #include "agent_host.h"
@@ -68,6 +69,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+// The running build's version, from CMakeLists.txt's project version.
+std::string appVersion();
+
 enum class PendingAction { None, New, Open, Exit, Tutorial };
 
 class RfSimulatorApp {
@@ -137,6 +142,10 @@ class RfSimulatorApp {
     // Settings > UI Font... toggles the font picker window.
     bool m_show_settings = false;
     SettingsPanelWidget m_settings_panel;
+    // Settings > Check for Updates... opens this window and starts a check.
+    // Nothing checks on its own: no startup check and no timer.
+    bool m_show_update_check = false;
+    simulator::update_check::UpdateChecker m_update_checker{appVersion()};
     // Installs a queued UI font choice. Call between frames, before ImGui::NewFrame. Returns true
     // when the UI font changed.
     bool applyPendingUiFont() { return m_ui_font.applyPending(); }
@@ -179,6 +188,7 @@ class RfSimulatorApp {
     AppAgentHost &testAgentHost();
     AgentPanelWidget &testAgentPanelWidget() { return m_agent_panel_widget; }
     void testStartTutorial();
+    simulator::update_check::UpdateChecker &testUpdateChecker() { return m_update_checker; }
     // Test-only commands keep fixture mutations explicit; read accessors below are const.
     IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
     IComponentEngine *testCreateComponent(
@@ -303,6 +313,9 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     void drawExtensionTrustPrompt();
+    // The Check for Updates window: status, release page, and the manual
+    // re-check/close actions. Never starts a check by itself.
+    void drawUpdateCheck();
     // The utility docking group's own top-level window ("Utility Space") with
     // its own dockspace. Views in the utility family open docked there by
     // default; View > Utility Space toggles the host.
