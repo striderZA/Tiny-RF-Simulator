@@ -15,7 +15,7 @@ The lower part of the **Settings** menu holds the saved window-layout actions:
 
 1. Choose **Settings > UI Font...** to open the Settings window.
 2. Pick a family from the **UI font** list. The list holds **Default (built-in)** and every monospaced font the system has installed, sorted by name. Each family appears once, however many styles it has.
-3. Choose a **Style** for the family. The list offers only the styles that family has, such as Regular, Light, Italic, or Bold Italic. Each style appears once. Where a family names several faces alike, such as Regular at several weights, each one is labelled with its weight, for example Regular (100). Weights that come from one variable font file draw the same face, so they appear as one row. The style sets the body text. Picking a family starts at Regular.
+3. Choose a **Style** for the family. The list offers only the styles that family has, such as Regular, Light, Italic, or Bold Italic. Each style appears once. Where a family names several faces alike, such as Regular at several weights, each one is labelled with its weight, for example Regular (100). A variable font file appears as one row, at the weight it draws by default. Its other named weights are not separate rows, because the simulator draws the file's default instance. The style sets the body text. Picking a family starts at Regular.
 4. Under **Bold text uses**, choose **Bold**. Choose **Medium** where the family has a Medium style; the option does not appear otherwise.
 5. Set the **Font size** slider, from 10 to 24 px.
 6. Check the **Preview** section. It shows the name of the font in use, a sample line in the body text, and a sample line in bold text.
