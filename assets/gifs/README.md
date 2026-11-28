@@ -63,7 +63,8 @@ GIF_SERIES=${GIF_SERIES:-E:/Jaco/Projects/rf-sim/gif-series}
 
    ```bash
    npx --yes hyperframes@0.9.63 render --quality delivery --fps 30 \
-     --chroma-subsampling 444 --output ../../renders/trs-02-master.mp4
+     --video-frame-format png --chroma-subsampling 444 \
+     --output ../../renders/trs-02-master.mp4
    bash "$GIF_SERIES/scripts/encode-gif.sh" \
      ../../renders/trs-02-master.mp4 ../../renders/trs-02-markers.gif 1080:1080
    ```
