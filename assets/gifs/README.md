@@ -80,10 +80,12 @@ GIF_SERIES=${GIF_SERIES:-E:/Jaco/Projects/rf-sim/gif-series}
 ## Rules
 
 - Font contract: every capture uses IoskeleyMonoTerm Nerd Font Mono, style Medium, size 18 px
-  (`scripts/capture.ps1` writes it into `app.ini`). 18 px at a 1:1 crop stays 18 px in the final
-  GIF, above the 11 px legibility floor at 100% and 75% zoom. The 960×540 hero needs no larger
-  capture. A dedicated mobile-only cut that is downscaled below about 0.61× would need a 24 px
-  capture, as report 28 measured.
+  (`scripts/capture.ps1` writes it into `app.ini`). The 1:1 crop keeps nominal type at 18 px and
+  ImPlot axis ticks at about 0.8x (≈14.4 px), so it clears the 11 px legibility floor at 1:1.
+  At 75% zoom the smallest tick labels fall to ≈10.8 px: still legible in the inspected frame but
+  below 11 px, because the floor is binding at 1:1 only. The 960×540 hero needs no larger capture.
+  A dedicated mobile-only cut downscaled below about 0.61x would need a 24 px capture, as report 28
+  measured.
 - No rebuilt app UI, no mocked readouts, no claims beyond the visible interface.
 - Do not commit raw captures, MP4 masters or the HyperFrames projects; they stay in the external
   workspace.
