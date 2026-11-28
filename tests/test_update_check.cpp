@@ -251,3 +251,19 @@ TEST_CASE("Update checker surfaces a fetch failure") {
     CHECK(checker.result().outcome == Outcome::Failed);
     CHECK(checker.result().message.find("curl exited with code 6.") != std::string::npos);
 }
+
+TEST_CASE("Update checker destruction never waits for a slow fetch") {
+    using simulator::update_check::FetchResult;
+
+    const auto started = std::chrono::steady_clock::now();
+    {
+        simulator::update_check::UpdateChecker checker("0.32.0");
+        checker.setFetcherForTesting([]() {
+            std::this_thread::sleep_for(1s);
+            return FetchResult{true, kNewerRelease, ""};
+        });
+        checker.start();
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    CHECK(elapsed < 300ms);
+}

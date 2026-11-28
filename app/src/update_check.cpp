@@ -6,7 +6,10 @@
 #include <charconv>
 #include <chrono>
 #include <cstddef>
+#include <mutex>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -90,6 +93,32 @@ int comparePrerelease(std::string_view left, std::string_view right) {
 std::string toolNotFoundMessage() {
     return "Neither curl nor wget was found on PATH. Install one, or download the release from "
            "GitHub.";
+}
+
+std::string toolFailureMessage(const std::string &tool, int exit_code) {
+    if (tool == "curl") {
+        switch (exit_code) {
+        case 6:
+        case 7:
+            return "Could not reach GitHub. Check your network connection.";
+        case 22:
+            return "GitHub returned an error while checking for updates. Try again later.";
+        case 28:
+            return "The update check timed out. Check your network connection.";
+        default:
+            break;
+        }
+    } else if (tool == "wget") {
+        switch (exit_code) {
+        case 4:
+            return "Could not reach GitHub. Check your network connection.";
+        case 8:
+            return "GitHub returned an error while checking for updates. Try again later.";
+        default:
+            break;
+        }
+    }
+    return tool + " exited with code " + std::to_string(exit_code) + ".";
 }
 
 } // namespace
@@ -262,61 +291,83 @@ FetchResult fetchLatestReleaseJson() {
     if (result->output_truncated)
         return FetchResult{false, "", "The update check response was too large."};
     if (result->exit_code != 0)
-        return FetchResult{false, "",
-                           tool + " exited with code " + std::to_string(result->exit_code) + "."};
+        return FetchResult{false, "", toolFailureMessage(tool, result->exit_code)};
     return FetchResult{true, result->output, ""};
 }
 
+struct UpdateChecker::SharedState {
+    std::mutex mutex;
+    bool done = false;
+    std::uint64_t generation = 0;
+    FetchResult fetched;
+};
+
 UpdateChecker::UpdateChecker(std::string current_version, Fetcher fetcher)
-    : m_current_version(std::move(current_version)), m_fetcher(std::move(fetcher)) {
+    : m_current_version(std::move(current_version)), m_fetcher(std::move(fetcher)),
+      m_state(std::make_shared<SharedState>()) {
     m_result.current_version = m_current_version;
 }
 
-UpdateChecker::~UpdateChecker() {
-    if (m_future.valid())
-        m_future.wait();
-}
+// The worker holds its own reference to the shared state, so quitting during a
+// check never waits for the fetch to finish.
+UpdateChecker::~UpdateChecker() = default;
 
 void UpdateChecker::setFetcherForTesting(Fetcher fetcher) { m_fetcher = std::move(fetcher); }
 
 void UpdateChecker::start() {
     if (isChecking())
         return;
-    if (m_future.valid())
-        m_future.wait();
     m_result = Result{};
     m_result.outcome = Outcome::Checking;
     m_result.current_version = m_current_version;
+
+    const std::uint64_t generation = ++m_generation;
+    const auto state = m_state;
     const Fetcher fetcher = m_fetcher;
-    m_future = std::async(std::launch::async, [fetcher]() { return fetcher(); });
+    try {
+        std::thread([state, fetcher, generation]() {
+            FetchResult fetched;
+            try {
+                fetched = fetcher();
+            } catch (const std::exception &error) {
+                fetched = FetchResult{false, "",
+                                      std::string("The update check failed unexpectedly: ") +
+                                          error.what()};
+            } catch (...) {
+                fetched = FetchResult{false, "", "The update check failed unexpectedly."};
+            }
+            std::lock_guard<std::mutex> lock(state->mutex);
+            // A result from an earlier generation must not overwrite a newer one.
+            if (generation < state->generation)
+                return;
+            state->generation = generation;
+            state->fetched = std::move(fetched);
+            state->done = true;
+        }).detach();
+    } catch (const std::system_error &) {
+        m_result = failedResult(m_current_version, "Could not start the update check worker.");
+    }
 }
 
 void UpdateChecker::poll() {
-    if (!m_future.valid() ||
-        m_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-        return;
     FetchResult fetched;
-    try {
-        fetched = m_future.get();
-    } catch (const std::exception &error) {
-        fetched = FetchResult{false, "",
-                              std::string("The update check failed unexpectedly: ") + error.what()};
-    } catch (...) {
-        fetched = FetchResult{false, "", "The update check failed unexpectedly."};
+    {
+        std::lock_guard<std::mutex> lock(m_state->mutex);
+        if (!m_state->done || m_state->generation != m_generation)
+            return;
+        fetched = std::move(m_state->fetched);
+        m_state->done = false;
     }
     finish(std::move(fetched));
 }
 
 void UpdateChecker::reset() {
-    if (m_future.valid())
-        m_future.wait();
-    m_future = std::future<FetchResult>{};
+    ++m_generation;
     m_result = Result{};
     m_result.current_version = m_current_version;
 }
 
 void UpdateChecker::finish(FetchResult fetched) {
-    m_future = std::future<FetchResult>{};
     if (!fetched.ok) {
         m_result =
             failedResult(m_current_version, fetched.error.empty() ? "The update check failed."

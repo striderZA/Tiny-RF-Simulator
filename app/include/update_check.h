@@ -1,7 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
-#include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -70,9 +71,10 @@ FetchResult fetchLatestReleaseJson();
 
 using Fetcher = std::function<FetchResult()>;
 
-// Owns one user-triggered check. start() launches the fetch, poll() reaps it
-// without blocking, and result() reports the latest state. Nothing checks on
-// construction or on a timer.
+// Owns one user-triggered check. start() launches the fetch on a detached
+// worker, poll() reaps it without blocking, and result() reports the latest
+// state. Nothing checks on construction or on a timer, and exit never waits on
+// a check in flight.
 class UpdateChecker {
   public:
     explicit UpdateChecker(std::string current_version, Fetcher fetcher = fetchLatestReleaseJson);
@@ -92,11 +94,16 @@ class UpdateChecker {
     void reset();
 
   private:
+    struct SharedState;
+
     void finish(FetchResult fetched);
 
     std::string m_current_version;
     Fetcher m_fetcher;
-    std::future<FetchResult> m_future;
+    std::shared_ptr<SharedState> m_state;
+    // Incremented by start() and reset(); a worker result for any other
+    // generation is stale and is ignored.
+    std::uint64_t m_generation = 0;
     Result m_result;
 };
 
