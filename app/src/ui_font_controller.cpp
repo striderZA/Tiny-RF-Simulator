@@ -167,43 +167,85 @@ bool UiFontController::applyPending() {
         requestedSize() != m_applied_size || style.FontScaleDpi != m_applied_scale;
     if (!m_dirty && !size_changed)
         return false;
-    }
-    if (resolution.applied_family.empty())
+    // A size held by the slider waits until it has stopped changing for kSizeSettleSeconds, then
+    // rebuilds once. A release (m_size_active false) rebuilds at once.
+    if (!m_dirty && m_size_active && ImGui::GetTime() - m_size_changed_at < kSizeSettleSeconds)
         return false;
-    const InstallResult result = installFamily(resolution.applied_family);
-    if (result == InstallResult::Installed) {
-        m_note.clear();
-        return true;
-    }
-    LOG_WARN("Settings: saved UI font %s could not be loaded; using Default",
-             quotedName(resolution.applied_family).c_str());
-    m_note = "Saved font " + quotedName(resolution.applied_family) +
-             " could not be loaded. Showing Default; the choice is kept.";
-    return result == InstallResult::FellBackToDefault;
+
+    const bool user = m_user_request;
+    m_dirty = false;
+    m_user_request = false;
+    const bool rebuilt = rebuild(user);
+    persist();
+    return rebuilt;
 }
 
-UiFontController::InstallResult UiFontController::installFamily(const std::string &family) {
-    std::vector<unsigned char> bytes;
-    if (!family.empty() && !ui_font::readSystemFontFile(family, bytes))
-        return InstallResult::Unchanged;
-
-    // Never add a font at size 0: ImGui would leave it with no legacy size and then fall back to
-    // its own 20 px default. applyPending() waits for the first frame, which sets this from the
-    // built-in font.
-    const float size_px = ImGui::GetStyle().FontSizeBase;
-    if (size_px <= 0.0f)
-        return InstallResult::Unchanged;
-
+bool UiFontController::rebuild(bool user) {
     ImGuiIO &io = ImGui::GetIO();
-    // Between frames only (see the class comment). ClearFonts() frees the previous font's input
-    // and its atlas glyphs; the backend releases the old texture after its last use.
-    io.Fonts->ClearFonts();
+    ImGuiStyle &style = ImGui::GetStyle();
+    const float size_px = requestedSize();
+    const float scale = style.FontScaleDpi;
+    // The raster size. The UI draws at FontSizeBase times the DPI scale, so the base is the size
+    // at 100% and the atlas font is rasterised at size times the scale.
+    const float raster_px = size_px * scale;
 
-    if (family.empty()) {
-        io.FontDefault = io.Fonts->AddFontDefault();
-        m_applied.clear();
-        return InstallResult::Installed;
+    std::vector<std::string> notes = m_load_notes;
+    std::string family = m_saved.family;
+    ui_font::FacePlan plan;
+    std::vector<unsigned char> body_bytes;
+    std::vector<unsigned char> emphasis_bytes;
+
+    if (!family.empty() &&
+        !ui_font::resolveSavedFamily(family, m_installed).missing_family.empty()) {
+        LOG_WARN("Settings: saved UI font %s is not installed; using Default",
+                 quotedName(family).c_str());
+        notes.push_back("Saved font " + quotedName(family) +
+                        " is not installed. Showing Default; the choice is kept and returns when "
+                        "the font is installed.");
+        family.clear();
     }
+    if (!family.empty()) {
+        plan = ui_font::planFaces(family, ui_font::familyFaces(m_candidates, family), m_saved.style,
+                                  m_saved.emphasis);
+        const bool loaded = plan.has_face &&
+                            ui_font::readSystemFontFace(family, plan.body, body_bytes) &&
+                            (sameFace(plan.body, plan.emphasis) ||
+                             ui_font::readSystemFontFace(family, plan.emphasis, emphasis_bytes));
+        if (!loaded) {
+            LOG_WARN("Settings: UI font %s could not be loaded", quotedName(family).c_str());
+            if (user) {
+                // A refused pick keeps the applied font and restores the saved choice.
+                restoreDiscrete();
+                m_note = quotedName(family) + " could not be loaded. " +
+                         (m_applied_family.empty() ? std::string("Showing Default.")
+                                                   : quotedName(m_applied_family) + " is kept.");
+                return false;
+            }
+            notes.push_back("Saved font " + quotedName(family) +
+                            " could not be loaded. Showing Default; the choice is kept.");
+            family.clear();
+        } else {
+            notes.insert(notes.end(), plan.notes.begin(), plan.notes.end());
+        }
+    }
+
+    const ui_font::FontFace body = family.empty() ? ui_font::FontFace{} : plan.body;
+    const ui_font::FontFace emphasis = family.empty() ? ui_font::FontFace{} : plan.emphasis;
+    const bool unchanged = family == m_applied_family && size_px == m_applied_size &&
+                           scale == m_applied_scale && m_regular != nullptr &&
+                           (family.empty() || (sameFace(body, m_applied_body) &&
+                                               sameFace(emphasis, m_applied_emphasis)));
+    if (unchanged) {
+        m_note = joined(notes);
+        return false;
+    }
+
+    // Between frames only. ClearFonts() frees the previous fonts and their atlas glyphs; the
+    // backend releases the old texture after its last use.
+    // ClearFonts() makes ImGui re-apply the context's stale base size to the style, so the size is
+    // set after it, and again before the fonts are chosen, since AddFontDefault() picks by it.
+    io.Fonts->ClearFonts();
+    style.FontSizeBase = size_px;
 
     // The atlas owns a copy, allocated with ImGui's allocator, so ClearFonts() frees it with the
     // font. A non-owned buffer must outlive the font until RemoveFont() or shutdown
