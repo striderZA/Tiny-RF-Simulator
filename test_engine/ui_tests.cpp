@@ -3291,7 +3291,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
                                 "UITestLayout.ini");
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->MenuClick("Settings/Save As...");
         ctx->SetRef("Save Layout As");
         ctx->ItemInputValue("Name", "UITestLayout");
         ctx->ItemClick("Save");
@@ -3309,7 +3309,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(std::filesystem::exists(path));
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Manage...");
+        ctx->MenuClick("Settings/Manage...");
         ctx->SetRef("Manage Layouts");
         ctx->ItemClick("UITestLayout/Delete");
         ctx->Yield();
@@ -3317,6 +3317,48 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
 
         IM_CHECK(!std::filesystem::exists(path));
+    };
+
+    // Saved-layout management moved under Settings; View > Layouts keeps the quick Load list.
+    // A layout saved through Settings must still be listed and loadable from View.
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "layout_management_moves_to_settings_and_load_stays_in_view");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto layout_file = std::filesystem::path(s_app->testLayoutManager().layoutsDir()) /
+                                 "SettingsMenuLayout.ini";
+        struct LayoutFileCleanup {
+            std::filesystem::path path;
+            ~LayoutFileCleanup() {
+                std::error_code ec;
+                std::filesystem::remove(path, ec);
+            }
+        } cleanup{layout_file};
+        std::filesystem::remove(layout_file);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/Save As...");
+        ctx->SetRef("Save Layout As");
+        ctx->ItemInputValue("Name", "SettingsMenuLayout");
+        ctx->ItemClick("Save");
+        ctx->SetRef("");
+        ctx->Yield();
+        IM_CHECK(std::filesystem::exists(layout_file));
+
+        // The moved Manage... entry opens the same window and lists the saved layout.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/Manage...");
+        ctx->SetRef("Manage Layouts");
+        IM_CHECK(ctx->ItemExists("SettingsMenuLayout/Delete"));
+        ctx->ItemClick("Close");
+        ctx->SetRef("");
+        ctx->Yield();
+
+        // Load stays in View > Layouts and finds the layout saved through Settings.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Load/SettingsMenuLayout");
+        ctx->SetRef("");
+        ctx->Yield();
+        IM_CHECK(std::filesystem::exists(layout_file));
     };
 
     // The utility docking group: opening an auxiliary view through its real
@@ -3437,7 +3479,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         std::filesystem::remove(layout_file);
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->MenuClick("Settings/Save As...");
         ctx->SetRef("Save Layout As");
         ctx->ItemInputValue("Name", "UtilityRoundTrip");
         ctx->ItemClick("Save");
@@ -3613,7 +3655,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const ImVec2 saved_size = space->Size;
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->MenuClick("Settings/Save As...");
         ctx->SetRef("Save Layout As");
         ctx->ItemInputValue("Name", "UtilitySpacePosSize");
         ctx->ItemClick("Save");
