@@ -77,6 +77,17 @@ class SpectrumAnalyzerWidget {
     };
     PlotArea lastPlotArea() const { return m_last_plot_area; }
 
+    // Top configuration block of the last draw(): whether its fields used two columns, the
+    // block's height (first control to plot, px), the content width the layout decided on, and
+    // the narrowest width two columns need. Test seam for the panel layout.
+    struct ConfigLayout {
+        bool two_columns = false;
+        float height = 0.0f;
+        float avail_width = 0.0f;
+        float two_column_min_width = 0.0f;
+    };
+    ConfigLayout lastConfigLayout() const { return m_last_config_layout; }
+
   private:
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
@@ -95,6 +106,7 @@ class SpectrumAnalyzerWidget {
     std::vector<double> m_readout_dBm;  // readout trace of the last draw() (issue #292)
     std::vector<double> m_readout_axis; // combined axis of the last draw()
     PlotArea m_last_plot_area;
+    ConfigLayout m_last_config_layout;
 
     MeasurementSelection m_measurement;
     MeasurementSelection::Resolution m_measurement_resolution;
@@ -118,6 +130,14 @@ class SpectrumAnalyzerWidget {
     void drawPeakTable();
     void drawHarmonicTable();
     void drawIm3Table();
+    // Top configuration block: the fields drawn as one column or two (see draw()).
+    void drawFrequencyFields();
+    void drawTraceFields();
+    void drawLevelFields();
+    void drawMeasureOnField(const std::vector<MeasurementProbeId> &probe_ids,
+                            const std::vector<bool> &probe_visible);
+    void drawMeasureOnSource();
+    std::string probeLabelAt(int index) const;
     // Moves the selected marker onto the selected table row, enabling it first if needed.
     void applySelectedPeak();
 };
