@@ -8,6 +8,7 @@
 #include "view_manager.h"
 #include <algorithm>
 #include <cstdio>
+#include <initializer_list>
 #include <limits>
 
 namespace {
@@ -26,6 +27,62 @@ const ImVec4 kMarkerColors[MarkerModel::kMaxMarkers] = {
     ImVec4(1.00f, 0.35f, 0.35f, 1.0f), // M4 red
 };
 const char *const kMarkerNames[MarkerModel::kMaxMarkers] = {"M1", "M2", "M3", "M4"};
+
+// Configuration-row widths, measured at the current font. Each column needs its own widest label
+// (the left column holds "Start (MHz)", the right "Min level (dBm)"), then the gap after the label,
+// then the narrowest numeric field: seven characters plus its two step buttons.
+float widestLabel(std::initializer_list<const char *> labels) {
+    float width = 0.0f;
+    for (const char *label : labels)
+        width = std::max(width, ImGui::CalcTextSize(label).x);
+    return width;
+}
+float leftColumnLabelWidth() {
+    return widestLabel({"Start (MHz)", "Stop (MHz)", "VBW (kHz)", "RBW (kHz)"});
+}
+float rightColumnLabelWidth() {
+    return widestLabel({"Trace Mode", "Avg Count", "Ref (dBm)", "Min level (dBm)", "Measure on"});
+}
+// The one-column stack sizes every field to the widest label, so the fields line up.
+float stackedLabelWidth() { return std::max(leftColumnLabelWidth(), rightColumnLabelWidth()); }
+float configFieldWidth() {
+    const ImGuiStyle &style = ImGui::GetStyle();
+    return ImGui::CalcTextSize("-100000").x +
+           2.0f * (ImGui::GetFrameHeight() + style.ItemInnerSpacing.x) +
+           2.0f * style.FramePadding.x;
+}
+// Gap between the two columns, two item spacings (px).
+float configColumnGap() { return 2.0f * ImGui::GetStyle().ItemSpacing.x; }
+// A column is wide enough when it holds its widest label, the gap after it, and the narrowest
+// field.
+float columnMinWidth(float label_width) {
+    return label_width + ImGui::GetStyle().ItemInnerSpacing.x + configFieldWidth();
+}
+// The dock's content width must reach this (px, at the current font) to use two columns.
+float twoColumnMinWidth() {
+    return columnMinWidth(leftColumnLabelWidth()) + columnMinWidth(rightColumnLabelWidth()) +
+           configColumnGap();
+}
+struct ConfigColumns {
+    float left = 0.0f;
+    float right = 0.0f;
+};
+// Splits the content width into two columns. Equal halves when both columns fit in them; otherwise
+// the left column takes just what its label and field need, and the right column takes the rest.
+ConfigColumns splitConfigColumns(float avail) {
+    const float half = (avail - configColumnGap()) * 0.5f;
+    const float need =
+        std::max(columnMinWidth(leftColumnLabelWidth()), columnMinWidth(rightColumnLabelWidth()));
+    ConfigColumns cols;
+    cols.left = half >= need ? half : columnMinWidth(leftColumnLabelWidth());
+    cols.right = avail - configColumnGap() - cols.left;
+    return cols;
+}
+// Sizes the next field to fill its column less the label after it, so the label stays in the
+// column and never reaches the other one.
+void pushConfigFieldWidth(float column_width, float label_width) {
+    ImGui::PushItemWidth(column_width - label_width - ImGui::GetStyle().ItemInnerSpacing.x);
+}
 } // namespace
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine,
@@ -601,33 +658,24 @@ void SpectrumAnalyzerWidget::drawIm3Table() {
     ImGui::EndTable();
 }
 
-void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
-    m_readout_dBm.clear();
-    m_last_plot_area = {};
-    // First-use size gives the plot a useful working area; the minimum stops at
-    // the width the labelled inputs need and a modest height so a docked panel
-    // never forces its dock node to grow and squeeze neighbouring panels
-    // (issue #88).
-    ImGui::SetNextWindowSize(ImVec2(640, 620), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 240), ImVec2(FLT_MAX, FLT_MAX));
-    if (!ImGui::Begin(title, p_open)) {
-        ImGui::End();
-        return;
-    }
+std::string SpectrumAnalyzerWidget::probeLabelAt(int index) const {
+    if (index >= 0 && static_cast<size_t>(index) < m_probe_labels.size())
+        return m_probe_labels[static_cast<size_t>(index)];
+    return "probe";
+}
 
+void SpectrumAnalyzerWidget::drawFrequencyFields() {
     double s = m_engine.startFrequency();
     double e = m_engine.stopFrequency();
     double vbw = m_engine.vbw();
     double rbw = m_engine.rbw();
-    double minp = m_engine.minPower();
-    double maxp = m_engine.maxPower();
 
-    if (utils::inputFrequency("Start Frequency (MHz)", s, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Start (MHz)", s, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
         LOG_INFO("Update start frequency: %.0f MHz", m_engine.startFrequency() / 1e6);
     }
 
-    if (utils::inputFrequency("Stop Frequency (MHz)", e, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Stop (MHz)", e, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
         LOG_INFO("Update stop frequency: %.0f MHz", m_engine.stopFrequency() / 1e6);
     }
@@ -656,7 +704,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                                "below that spacing cannot be resolved.");
         ImGui::EndTooltip();
     }
+}
 
+void SpectrumAnalyzerWidget::drawTraceFields() {
     // Trace mode controls
     static const char *trace_mode_labels[] = {"Clear/Write", "Max Hold", "Min Hold", "Video Avg"};
     static const TraceMode trace_mode_values[] = {TraceMode::ClearWrite, TraceMode::MaxHold,
@@ -689,6 +739,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             m_engine.resetTraceHistory();
         }
     }
+}
+
+void SpectrumAnalyzerWidget::drawLevelFields() {
+    double minp = m_engine.minPower();
+    double maxp = m_engine.maxPower();
 
     if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
         m_engine.setMaxPower(maxp);
@@ -699,7 +754,91 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setMinPower(minp);
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
+}
 
+void SpectrumAnalyzerWidget::drawMeasureOnField(const std::vector<MeasurementProbeId> &probe_ids,
+                                                const std::vector<bool> &probe_visible) {
+    // Measurement source: every visible trace (the historic combined readout) or one
+    // probe's own trace. The chosen probe stays selected while hidden/absent so the
+    // fallback below can explain why the readout is back on the visible traces.
+    std::vector<std::string> measure_items;
+    measure_items.reserve(m_probe_labels.size() + 1);
+    measure_items.emplace_back("All visible");
+    for (size_t i = 0; i < m_probe_labels.size(); ++i)
+        measure_items.push_back("[" + std::to_string(i) + "] " + m_probe_labels[i]);
+
+    int measure_index = 0;
+    if (!m_measurement.allVisible() && m_measurement_resolution.requested_index >= 0) {
+        measure_index = std::min(m_measurement_resolution.requested_index + 1,
+                                 static_cast<int>(measure_items.size()) - 1);
+    }
+    // The combo takes the field width its column (or the one-column stack) pushed.
+    // BeginCombo rather than Combo: a removed or hidden probe can leave the preview
+    // already showing "All visible", and the user must still be able to apply that
+    // choice to clear the stored selection.
+    if (ImGui::BeginCombo("Measure on", measure_items[measure_index].c_str())) {
+        for (int i = 0; i < static_cast<int>(measure_items.size()); ++i) {
+            const bool selected = i == measure_index;
+            if (ImGui::Selectable(measure_items[i].c_str(), selected)) {
+                measure_index = i;
+                if (i <= 0) {
+                    m_measurement.selectAllVisible();
+                    m_measure_label.clear();
+                } else {
+                    const size_t slot = static_cast<size_t>(i - 1);
+                    if (slot < probe_ids.size()) {
+                        m_measurement.selectProbe(probe_ids[slot]);
+                        m_measure_label = probeLabelAt(static_cast<int>(slot));
+                    }
+                }
+                m_measurement_resolution = m_measurement.resolve(probe_ids, probe_visible);
+            }
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+}
+
+void SpectrumAnalyzerWidget::drawMeasureOnSource() {
+    // Names the source the readouts follow, and why a chosen probe is not the one measured.
+    std::string source = "Measure on: ";
+    if (m_measurement_resolution.allVisible())
+        source += "All visible traces";
+    else
+        source += "[" + std::to_string(m_measurement_resolution.probe_index) + "] " +
+                  probeLabelAt(m_measurement_resolution.probe_index);
+    if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Hidden) {
+        source += " (probe [" + std::to_string(m_measurement_resolution.requested_index) + "] " +
+                  probeLabelAt(m_measurement_resolution.requested_index) + " hidden)";
+    } else if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Removed) {
+        source +=
+            " (" +
+            (m_measure_label.empty() ? std::string("selected probe") : "probe " + m_measure_label) +
+            " removed)";
+    }
+    ImGui::TextUnformatted(source.c_str());
+}
+
+void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
+    m_readout_dBm.clear();
+    m_last_plot_area = {};
+    m_last_config_layout = {};
+    // First-use size gives the plot a useful working area; the minimum stops at
+    // the width the labelled inputs need and a modest height so a docked panel
+    // never forces its dock node to grow and squeeze neighbouring panels
+    // (issue #88).
+    ImGui::SetNextWindowSize(ImVec2(640, 620), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 240), ImVec2(FLT_MAX, FLT_MAX));
+    if (!ImGui::Begin(title, p_open)) {
+        ImGui::End();
+        return;
+    }
+
+    // Top block: the configuration fields. A dock wide enough for two columns (threshold in
+    // twoColumnMinWidth()) splits them; a narrower one stacks them. Both draw the same fields in
+    // the same order: the left column first, then the right.
+    const ImVec2 block_top = ImGui::GetCursorScreenPos();
     auto active_nodes = m_view_manager.getActiveNodes();
 
     // Sync visibility tracking vector with current probe count
@@ -725,71 +864,44 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         for (size_t i = 0; i < m_probe_labels.size(); ++i)
             probes += "  [" + std::to_string(i) + "] " + m_probe_labels[i];
         ImGui::TextUnformatted(probes.c_str());
-
-        // Measurement source: every visible trace (the historic combined readout) or one
-        // probe's own trace. The chosen probe stays selected while hidden/absent so the
-        // fallback below can explain why the readout is back on the visible traces.
-        auto probe_label = [&](int index) -> std::string {
-            if (index >= 0 && static_cast<size_t>(index) < m_probe_labels.size())
-                return m_probe_labels[static_cast<size_t>(index)];
-            return "probe";
-        };
-
-        std::vector<std::string> measure_items;
-        measure_items.reserve(m_probe_labels.size() + 1);
-        measure_items.emplace_back("All visible");
-        for (size_t i = 0; i < m_probe_labels.size(); ++i)
-            measure_items.push_back("[" + std::to_string(i) + "] " + m_probe_labels[i]);
-
-        int measure_index = 0;
-        if (!m_measurement.allVisible() && m_measurement_resolution.requested_index >= 0) {
-            measure_index = std::min(m_measurement_resolution.requested_index + 1,
-                                     static_cast<int>(measure_items.size()) - 1);
-        }
-        ImGui::SetNextItemWidth(240.0f);
-        // BeginCombo rather than Combo: a removed or hidden probe can leave the preview
-        // already showing "All visible", and the user must still be able to apply that
-        // choice to clear the stored selection.
-        if (ImGui::BeginCombo("Measure on", measure_items[measure_index].c_str())) {
-            for (int i = 0; i < static_cast<int>(measure_items.size()); ++i) {
-                const bool selected = i == measure_index;
-                if (ImGui::Selectable(measure_items[i].c_str(), selected)) {
-                    measure_index = i;
-                    if (i <= 0) {
-                        m_measurement.selectAllVisible();
-                        m_measure_label.clear();
-                    } else {
-                        const size_t slot = static_cast<size_t>(i - 1);
-                        if (slot < probe_ids.size()) {
-                            m_measurement.selectProbe(probe_ids[slot]);
-                            m_measure_label = probe_label(static_cast<int>(slot));
-                        }
-                    }
-                    m_measurement_resolution = m_measurement.resolve(probe_ids, probe_visible);
-                }
-                if (selected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-
-        std::string source = "Measure on: ";
-        if (m_measurement_resolution.allVisible())
-            source += "All visible traces";
-        else
-            source += "[" + std::to_string(m_measurement_resolution.probe_index) + "] " +
-                      probe_label(m_measurement_resolution.probe_index);
-        if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Hidden) {
-            source += " (probe [" + std::to_string(m_measurement_resolution.requested_index) +
-                      "] " + probe_label(m_measurement_resolution.requested_index) + " hidden)";
-        } else if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Removed) {
-            source += " (" +
-                      (m_measure_label.empty() ? std::string("selected probe")
-                                               : "probe " + m_measure_label) +
-                      " removed)";
-        }
-        ImGui::TextUnformatted(source.c_str());
     }
+
+    const bool has_probes = !m_probe_labels.empty();
+    const float block_avail = ImGui::GetContentRegionAvail().x;
+    const float min_width = twoColumnMinWidth();
+    const bool two_columns = block_avail >= min_width;
+    if (two_columns) {
+        // Left: the span and bandwidth fields. Right: trace, levels, and the measurement source.
+        // Groups and a SameLine offset place the columns; an ImGui table would push its ID onto
+        // the window's ID stack and hide these fields from label lookups.
+        const ConfigColumns cols = splitConfigColumns(block_avail);
+        ImGui::BeginGroup();
+        pushConfigFieldWidth(cols.left, leftColumnLabelWidth());
+        drawFrequencyFields();
+        ImGui::PopItemWidth();
+        ImGui::EndGroup();
+        // SameLine's offset counts from the window origin, so start from the content origin.
+        ImGui::SameLine(ImGui::GetCursorStartPos().x + cols.left + configColumnGap());
+        ImGui::BeginGroup();
+        pushConfigFieldWidth(cols.right, rightColumnLabelWidth());
+        drawTraceFields();
+        drawLevelFields();
+        if (has_probes)
+            drawMeasureOnField(probe_ids, probe_visible);
+        ImGui::PopItemWidth();
+        ImGui::EndGroup();
+    } else {
+        // One column: each field fills the dock less the widest label, so the fields line up.
+        pushConfigFieldWidth(block_avail, stackedLabelWidth());
+        drawFrequencyFields();
+        drawTraceFields();
+        drawLevelFields();
+        if (has_probes)
+            drawMeasureOnField(probe_ids, probe_visible);
+        ImGui::PopItemWidth();
+    }
+    if (has_probes)
+        drawMeasureOnSource();
     ImGui::Separator();
 
     // A new measurement source invalidates cached peak lists: Next Peak must cycle the
@@ -948,6 +1060,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const double plot_start_Hz = m_engine.plotStartFrequency(all_active);
     ImPlot::SetNextAxesLimits(plot_start_Hz, m_engine.stopFrequency(), m_engine.minPower(),
                               m_engine.maxPower(), ImPlotCond_Always);
+
+    // Layout seam for the panel test: the top block's height, first control to plot.
+    m_last_config_layout = {two_columns, ImGui::GetCursorScreenPos().y - block_top.y, block_avail,
+                            min_width};
 
     // Let the plot absorb the remaining window height (ImPlot's own default is
     // a fixed 300 px), reserving room for the readout rows drawn below it and
@@ -1122,6 +1238,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     ImGui::SameLine();
     static const char *sides_labels[] = {"Double-sided", "Single-sided"};
     int sides_idx = m_engine.spectrumSides() == SpectrumSides::SingleSided ? 1 : 0;
+    // The combo fills the rest of the row less its measured label, with a floor so the list stays
+    // usable, so a narrow dock keeps the label inside the panel.
+    const float sides_label_w =
+        ImGui::CalcTextSize("Spectrum").x + ImGui::GetStyle().ItemInnerSpacing.x;
+    ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x - sides_label_w));
     if (ImGui::Combo("Spectrum##sides", &sides_idx, sides_labels, 2)) {
         m_engine.setSpectrumSides(sides_idx == 1 ? SpectrumSides::SingleSided
                                                  : SpectrumSides::DoubleSided);
