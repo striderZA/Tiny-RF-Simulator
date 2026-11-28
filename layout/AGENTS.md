@@ -17,7 +17,7 @@ plus named, user-managed layout presets.
   ImGui's own `IniFilename` autosave (see `core/src/core.cpp`); no
   `LayoutManager` method needs to be called for it to stay current.
 - Named presets: `<exe_dir>/layouts/<sanitized-name>.ini`, written only on
-  explicit user action (`View > Layouts > Save As...` in `app/`).
+  explicit user action (`Settings > Save As...` in `app/`).
 - `sanitizeName` is mandatory on any user-supplied preset name before it
   touches the filesystem.
 - `saveDefaultLayout`/`loadDefaultLayout`/`saveNamedLayout`/`loadNamedLayout`

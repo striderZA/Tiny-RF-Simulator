@@ -1901,11 +1901,9 @@ void RfSimulatorApp::draw_ui() {
             utility_view_item("Test Flow", m_show_test_flow);
             utility_view_item("Agent", m_show_agent);
             ImGui::Separator();
+            // Layouts keeps the frequent switch between saved presets; saving and
+            // managing them live under Settings.
             if (ImGui::BeginMenu("Layouts")) {
-                if (ImGui::MenuItem("Save As...")) {
-                    m_layout_name_buf[0] = '\0';
-                    m_show_save_layout_dialog = true;
-                }
                 auto layout_names = m_layout_manager.listNamedLayouts();
                 if (ImGui::BeginMenu("Load", !layout_names.empty())) {
                     for (const auto &name : layout_names) {
@@ -1914,8 +1912,6 @@ void RfSimulatorApp::draw_ui() {
                     }
                     ImGui::EndMenu();
                 }
-                if (ImGui::MenuItem("Manage..."))
-                    m_show_manage_layouts_dialog = true;
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();
@@ -1948,6 +1944,13 @@ void RfSimulatorApp::draw_ui() {
         }
         if (ImGui::BeginMenu("Settings")) {
             ImGui::MenuItem("UI Font...", nullptr, &m_show_settings);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Save As...")) {
+                m_layout_name_buf[0] = '\0';
+                m_show_save_layout_dialog = true;
+            }
+            if (ImGui::MenuItem("Manage..."))
+                m_show_manage_layouts_dialog = true;
             ImGui::EndMenu();
         }
 
