@@ -35,7 +35,7 @@ This documentation is for people who run the simulator. It covers the Windows an
 
 ## Settings
 
-- [Settings](settings.md) — pick the interface font, its style, and its size from the monospaced fonts installed on your system. The choice applies at once and is saved.
+- [Settings](settings.md) — pick the interface font, its style, and its size from the monospaced fonts installed on your system, and save or manage named window layouts. The choice applies at once and is saved.
 
 ## Project status
 

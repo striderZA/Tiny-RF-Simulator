@@ -1,6 +1,15 @@
 # Settings
 
-The **Settings** menu sits between **Tools** and **Help** in the menu bar. It holds the simulator's preferences: the interface font, its style, and its size.
+The **Settings** menu sits between **Tools** and **Help** in the menu bar. It holds the simulator's preferences: the interface font, its style, and its size, and the saved-layout actions.
+
+## Manage saved layouts
+
+The lower part of the **Settings** menu holds the saved window-layout actions:
+
+- **Settings > Save As...** saves the current arrangement — the main window and the Utility Space — under a name.
+- **Settings > Manage...** opens the Manage Layouts window, where saved layouts can be loaded, renamed, or deleted.
+
+**View > Layouts > Load** stays in the View menu for switching between saved layouts; pick a name there to restore it.
 
 ## Choose a UI font
 

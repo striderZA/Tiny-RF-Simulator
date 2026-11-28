@@ -13,6 +13,8 @@
 
 ### Changed
 
+- **Saved-layout management moves to the Settings menu** — **Save As...** and **Manage...** now sit under **Settings**, below **UI Font...** and a separator. **View > Layouts > Load** stays in the View menu for switching between saved presets. The save and manage windows, the named-layout list, and the menu wording are unchanged; only where the items live moved.
+
 - **Text-sized widths in the receiver requirement fields, PFB calculator readout, and Spectrum Analyzer marker selector** — the receiver requirement numeric fields, the Filter Calculator's second readout column, and the Spectrum Analyzer **Marker** selector size from the measured text of a sample value instead of fixed pixel offsets.
 
 - **Two-column Spectrum Analyzer configuration** — the fields above the plot (Start and Stop, VBW, RBW, Trace Mode, Avg Count, Ref, Min level, and the **Measure on** list) sit in two columns once the panel is about 428 px wide at the default font, so the block is about a third shorter and the plot takes the room back. That covers the usual 440–500 px utility-group width. A narrower panel keeps the single column with the same fields in the same order. The **Start Frequency (MHz)** and **Stop Frequency (MHz)** captions are now **Start (MHz)** and **Stop (MHz)** so both columns fit. No control, range, or behaviour changed.
