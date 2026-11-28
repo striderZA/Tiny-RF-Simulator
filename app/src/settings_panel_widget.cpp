@@ -25,7 +25,9 @@ void heading(const UiFontController &fonts, const char *text) {
 } // namespace
 
 void SettingsPanelWidget::draw(bool *p_open, UiFontController &fonts) {
-    ImGui::SetNextWindowSize(ImVec2(460, 600), ImGuiCond_FirstUseEver);
+    // Fits the largest UI font (24 px) without a scrollbar: the controls and preview are below the
+    // fold otherwise.
+    ImGui::SetNextWindowSize(ImVec2(540, 800), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Settings", p_open)) {
         ImGui::End();
         return;
@@ -108,9 +110,9 @@ void SettingsPanelWidget::draw(bool *p_open, UiFontController &fonts) {
         const std::string name = applied + " " + fonts.appliedBodyFace().style;
         ImGui::TextUnformatted(name.c_str());
     }
-    ImGui::TextUnformatted(kSampleLine);
+    ImGui::TextWrapped("%s", kSampleLine);
     ImGui::PushFont(fonts.emphasisFont(), ImGui::GetStyle().FontSizeBase);
-    ImGui::TextUnformatted(kBoldSampleLine);
+    ImGui::TextWrapped("%s", kBoldSampleLine);
     ImGui::PopFont();
 
     ImGui::End();

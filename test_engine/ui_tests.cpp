@@ -1108,6 +1108,37 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // The Settings window fits the largest UI font without a scrollbar, so its Style, Font size,
+    // and Preview controls are reachable at 24 px without scrolling.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_window_fits_24px");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const float builtin = s_app->m_ui_font.builtinSize();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/UI Font...");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_settings);
+        ctx->SetRef("Settings");
+        ctx->Yield(2);
+        s_app->m_ui_font.setSize(ui_font::kMaxSizePx, false);
+        ctx->Yield(4);
+        ImGuiWindow *window = ImGui::FindWindowByName("Settings");
+        IM_CHECK(window != nullptr);
+        if (window != nullptr) {
+            IM_CHECK(window->ScrollMax.y <= 0.0f);
+            IM_CHECK(window->ScrollMax.x <= 0.0f);
+        }
+        // At 24 px the Default row can sit below the list's visible part, so return to the built-in
+        // size before choosing Default, as the other Settings cases do.
+        s_app->m_ui_font.setSize(static_cast<int>(std::lround(builtin)), false);
+        ctx->Yield(4);
+        ctx->ItemClick("**/Default (built-in)");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.requestedSize() == builtin);
+        s_app->m_show_settings = false;
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
+
     // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the
     // field, not the canvas, and the field edit becomes one undo record when it is committed.
     t = IM_REGISTER_TEST(e, "rf_simulator", "ctrl_z_while_editing_field_is_ignored");
